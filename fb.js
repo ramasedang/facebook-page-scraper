@@ -11,6 +11,30 @@ async function delay(time) {
   });
 }
 
+async function loginFB(fb) {
+  await fb.goto('https://facebook.com');
+  await fb.waitForTimeout(1000);
+  await fb.waitForSelector(FB_COOKIE, { delay: 500 });
+  await fb.click(FB_COOKIE);
+  await fb.waitForSelector(FB_USERNAME, { delay: 500 });
+  await fb.waitForTimeout(100);
+  await fb.focus(FB_USERNAME);
+  await fb.type(FB_USERNAME, 'akunbaru080401@gmail.com', {
+    delay: 20,
+  });
+  await fb.waitForSelector(FB_PASSWORD, { delay: 300 });
+  await fb.waitForTimeout(500);
+  await fb.focus(FB_PASSWORD);
+  await fb.type(FB_PASSWORD, 'katasandi123!', { delay: 20 });
+  await fb.waitForTimeout(500);
+  await fb.click(FB_LOGIN);
+  await fb.waitForTimeout(5000);
+  await fb.goto(
+    'https://mbasic.facebook.com/BH.Australia?v=timeline'
+  );
+  await fb.waitForSelector('article');
+}
+
 const FB_COOKIE = 'button[data-cookiebanner]:first-child';
 const FB_USERNAME = '#email';
 const FB_PASSWORD = '#pass';
@@ -21,47 +45,18 @@ let total_comment = 0;
 let total_share = 0;
 let final_data = [];
 
-const proxies = [
-  {
-    server: '5.154.254.217:5228',
-    username: 'dmproxy5387',
-    password: 'dmproxy5387',
-  },
-  // Add more proxies here...
-];
-
-async function run() {
-  for (let proxyIndex = 0; proxyIndex < proxies.length; proxyIndex++) {
-    const proxy = proxies[proxyIndex];
-    console.log(`Using proxy: ${proxy.server}`);
-
-    const browser = await chromium.launch({
-      headless: false,
-      proxy: proxy,
-    });
-
-    const fb = await browser.newPage();
-    await fb.goto('https://facebook.com');
-    await fb.waitForTimeout(1000);
-    await fb.waitForSelector(FB_COOKIE, { delay: 500 });
-    await fb.click(FB_COOKIE);
-    await fb.waitForSelector(FB_USERNAME, { delay: 500 });
-    await fb.waitForTimeout(100);
-    await fb.focus(FB_USERNAME);
-    await fb.type(FB_USERNAME, 'akunbaru080401@gmail.com', {
-      delay: 50,
-    });
-    await fb.waitForSelector(FB_PASSWORD, { delay: 300 });
-    await fb.waitForTimeout(500);
-    await fb.focus(FB_PASSWORD);
-    await fb.type(FB_PASSWORD, 'katasandi123!', { delay: 50 });
-    await fb.waitForTimeout(500);
-    await fb.click(FB_LOGIN);
-    await fb.waitForTimeout(5000);
-    await fb.goto(
-      'https://mbasic.facebook.com/BH.Australia?v=timeline'
-    );
-    await fb.waitForSelector('article');
+chromium
+  .launch({
+    headless: false,
+    proxy: {
+      server: 'http://104.222.187.135:6259', // your SOCKS5 proxy server
+      username: 'dmproxy5387', // your username
+      password: 'dmproxy5387', // your password
+    },
+  })
+  .then(async (browser) => {
+    let fb = await browser.newPage();
+    await loginFB(fb);
 
     let dataFb = [];
 
@@ -119,19 +114,25 @@ async function run() {
 
     console.log(dataFb);
     fs.writeFileSync('posts.json', JSON.stringify(dataFb, null, 2));
-    // close
     await browser.close();
+
     // let dataFb = JSON.parse(fs.readFileSync('posts.json'));
 
     let monthlyData = {};
 
-    for (let i = 0; i < dataFb.length; i++) {
-      const browser = await chromium.launch({
-        headless: false,
-        proxy: proxies[proxyIndex], // Use the current proxy
-      });
-      const fb = await browser.newPage();
+    const browser2 = await chromium.launch({
+      headless: false,
+      proxy: {
+        server: 'http://154.92.124.189:5217', // your SOCKS5 proxy server
+        username: 'dmproxy5387', // your username
+        password: 'dmproxy5387', // your password
+      },
+    });
 
+    fb = await browser2.newPage();
+    await loginFB(fb);
+
+    for (let i = 0; i < dataFb.length; i++) {
       await fb.goto(
         'https://www.facebook.com/story.php?story_fbid=' +
           dataFb[i].postId +
@@ -179,8 +180,6 @@ async function run() {
           posts: 1,
         };
       }
-
-      await browser.close();
     }
 
     // Convert the monthly data into an array
@@ -199,7 +198,6 @@ async function run() {
       'monthly_data.json',
       JSON.stringify(final_data, null, 2)
     );
-  }
-}
 
-run();
+    await browser.close();
+  });
