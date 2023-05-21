@@ -21,16 +21,25 @@ let total_comment = 0;
 let total_share = 0;
 let final_data = [];
 
-chromium
-  .launch({
-    headless: false,
-    proxy: {
-      server: 'http://104.222.187.135:6259', // your SOCKS5 proxy server
-      username: 'dmproxy5387', // your username
-      password: 'dmproxy5387', // your password
-    },
-  })
-  .then(async (browser) => {
+const proxies = [
+  {
+    server: '5.154.254.217:5228',
+    username: 'dmproxy5387',
+    password: 'dmproxy5387',
+  },
+  // Add more proxies here...
+];
+
+async function run() {
+  for (let proxyIndex = 0; proxyIndex < proxies.length; proxyIndex++) {
+    const proxy = proxies[proxyIndex];
+    console.log(`Using proxy: ${proxy.server}`);
+
+    const browser = await chromium.launch({
+      headless: false,
+      proxy: proxy,
+    });
+
     const fb = await browser.newPage();
     await fb.goto('https://facebook.com');
     await fb.waitForTimeout(1000);
@@ -40,12 +49,12 @@ chromium
     await fb.waitForTimeout(100);
     await fb.focus(FB_USERNAME);
     await fb.type(FB_USERNAME, 'akunbaru080401@gmail.com', {
-      delay: 15,
+      delay: 50,
     });
     await fb.waitForSelector(FB_PASSWORD, { delay: 300 });
     await fb.waitForTimeout(500);
     await fb.focus(FB_PASSWORD);
-    await fb.type(FB_PASSWORD, 'katasandi123!', { delay: 15 });
+    await fb.type(FB_PASSWORD, 'katasandi123!', { delay: 50 });
     await fb.waitForTimeout(500);
     await fb.click(FB_LOGIN);
     await fb.waitForTimeout(5000);
@@ -109,16 +118,20 @@ chromium
     }
 
     console.log(dataFb);
-    fs.writeFileSync(
-      'posts.json',
-      JSON.stringify(dataFb, null, 2)
-    );
-
+    fs.writeFileSync('posts.json', JSON.stringify(dataFb, null, 2));
+    // close
+    await browser.close();
     // let dataFb = JSON.parse(fs.readFileSync('posts.json'));
 
     let monthlyData = {};
 
     for (let i = 0; i < dataFb.length; i++) {
+      const browser = await chromium.launch({
+        headless: false,
+        proxy: proxies[proxyIndex], // Use the current proxy
+      });
+      const fb = await browser.newPage();
+
       await fb.goto(
         'https://www.facebook.com/story.php?story_fbid=' +
           dataFb[i].postId +
@@ -144,38 +157,49 @@ chromium
         '-' +
         ('0' + (date.getMonth() + 1)).slice(-2); // format as YYYY-MM
 
-        const likesElement = await fb.$('#root > table > tbody > tr > td > div > div > a:nth-child(5) > span');
-        const likesCount = likesElement ? parseInt(await fb.evaluate(el => el.innerText, likesElement)) : 0;
-      
-        if (monthlyData[yearMonth]) {
-          monthlyData[yearMonth].comments += commentCount;
-          monthlyData[yearMonth].shares += shareCount;
-          monthlyData[yearMonth].likes += likesCount;
-          monthlyData[yearMonth].posts++;
-        } else {
-          monthlyData[yearMonth] = {
-            comments: commentCount,
-            shares: shareCount,
-            likes: likesCount,
-            posts: 1,
-          };
-        }
+      const likesElement = await fb.$(
+        '#root > table > tbody > tr > td > div > div > a:nth-child(5) > span'
+      );
+      const likesCount = likesElement
+        ? parseInt(
+            await fb.evaluate((el) => el.innerText, likesElement)
+          )
+        : 0;
+
+      if (monthlyData[yearMonth]) {
+        monthlyData[yearMonth].comments += commentCount;
+        monthlyData[yearMonth].shares += shareCount;
+        monthlyData[yearMonth].likes += likesCount;
+        monthlyData[yearMonth].posts++;
+      } else {
+        monthlyData[yearMonth] = {
+          comments: commentCount,
+          shares: shareCount,
+          likes: likesCount,
+          posts: 1,
+        };
       }
-      
-      // Convert the monthly data into an array
-      let final_data = Object.entries(monthlyData).map(([date, data]) => ({
+
+      await browser.close();
+    }
+
+    // Convert the monthly data into an array
+    let final_data = Object.entries(monthlyData).map(
+      ([date, data]) => ({
         date,
         posts: data.posts,
         comments: data.comments,
         shares: data.shares,
         likes: data.likes,
-      }));
+      })
+    );
 
     console.log(final_data);
     fs.writeFileSync(
       'monthly_data.json',
       JSON.stringify(final_data, null, 2)
     );
+  }
+}
 
-    // await browser.close();
-  });
+run();
